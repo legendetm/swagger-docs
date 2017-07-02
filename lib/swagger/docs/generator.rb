@@ -91,8 +91,8 @@ module Swagger
 
         private
 
-        def transform_spec_to_api_path(spec, controller_base_path, extension)
-          api_path = spec.to_s.dup
+        def transform_spec_to_api_path(spec, mount_spec, controller_base_path, extension)
+          api_path = [mount_spec.to_s, spec.to_s].join('')
           api_path.gsub!('(.:format)', extension ? ".#{extension}" : '')
           api_path.gsub!(/:(\w+)/, '{\1}')
           api_path.gsub!(controller_base_path, '')
@@ -178,7 +178,9 @@ module Swagger
         end
 
         def routes
-          Config.base_applications.map{|app| app.routes.routes.to_a }.flatten
+          Config.base_applications.flat_map do |app|
+            app.routes.routes.map {|route| AppRoute.new(app, route)}
+          end
         end
 
         def get_route_path_apis(path, route, klass, settings, config)
@@ -189,8 +191,7 @@ module Swagger
           operation = Hash[operation.map {|k, v| [k.to_s.gsub("@","").to_sym, v.respond_to?(:deep_dup) ? v.deep_dup : v.dup] }] # rename :@instance hash keys
           nickname = operation[:nickname] = path_route_nickname(path, route)
 
-          route_path = if defined?(route.path.spec) then route.path.spec else route.path end
-          api_path = transform_spec_to_api_path(route_path, settings[:controller_base_path], config[:api_extension_type])
+          api_path = transform_spec_to_api_path(route.route_path, route.mount_path, settings[:controller_base_path], config[:api_extension_type])
           operation[:parameters] = filter_path_params(api_path, operation[:parameters]) if operation[:parameters]
           operations = verbs.collect{|verb|
             op = operation.dup
