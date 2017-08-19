@@ -106,6 +106,12 @@ The following table shows all the current configuration options and their defaul
 </tr>
 
 <tr>
+<td><b>applications</b></td>
+<td>List of application for which the swagger-docs are generated.</td>
+<td>Swagger::Docs::Config.base_application => [Rails.application]</td>
+</tr>
+
+<tr>
 <td><b>base_path</b></td>
 <td>The URI base path for your API - e.g. api.somedomain.com</td>
 <td>/</td>
