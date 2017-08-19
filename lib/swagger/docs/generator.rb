@@ -119,8 +119,10 @@ module Swagger
           str.gsub(/\A\/+/, '')
         end
 
+        # Only trim the trailing / if there are other characters
         def trim_trailing_slash(str)
           return str if !str
+          return str if str == '/'
           str.gsub(/\/+\z/, '')
         end
 
@@ -235,7 +237,7 @@ module Swagger
         end
 
         def get_settings(api_version, config)
-          base_path = trim_trailing_slash(config[:base_path] || "")
+          base_path = trim_trailing_slash(config[:base_path] || "/")
           controller_base_path = trim_leading_slash(config[:controller_base_path] || "")
           base_path += "/#{controller_base_path}" unless controller_base_path.empty?
           api_file_path = config[:api_file_path]
