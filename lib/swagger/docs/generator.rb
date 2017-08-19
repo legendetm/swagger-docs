@@ -137,7 +137,7 @@ module Swagger
           klass = Config.log_exception { "#{path.to_s.camelize}Controller".constantize } rescue nil
           return {action: :skipped, path: path, reason: :klass_not_present} if !klass
           return {action: :skipped, path: path, reason: :not_swagger_resource} if !klass.methods.include?(:swagger_config) or !klass.swagger_config[:controller]
-          return {action: :skipped, path: path, reason: :not_kind_of_parent_controller} if config[:parent_controller] && !(klass < config[:parent_controller])
+          return {action: :skipped, path: path, reason: :not_kind_of_parent_controller} unless proccess_controller?(config, klass)
           apis, models, defined_nicknames = [], {}, []
           routes(config).select{|i| i.defaults[:controller] == path}.each do |route|
             unless nickname_defined?(defined_nicknames, path, route) # only add once for each route once e.g. PATCH, PUT 
@@ -148,6 +148,13 @@ module Swagger
             end
           end
           {action: :processed, path: path, apis: apis, models: models, klass: klass}
+        end
+
+        def proccess_controller?(config, controller)
+          return true unless config[:parent_controller]
+          parent_controller = config[:parent_controller]
+          parent_controller = parent_controller.constantize if parent_controller.is_a?(String)
+          controller < parent_controller
         end
 
         def route_verbs(route)

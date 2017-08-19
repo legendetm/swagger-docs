@@ -167,6 +167,13 @@ describe Swagger::Docs::Generator do
         results = generate(api_config)
         expect(results[DEFAULT_VER][:processed].count).to eq(controllers.count)
       end
+      it "respects parent_controller config option with class name" do
+        new_config = default_config
+        new_config[:parent_controller] = 'ApplicationController'
+        api_config = Swagger::Docs::Config.register_apis(DEFAULT_VER => new_config)
+        results = generate(api_config)
+        expect(results[DEFAULT_VER][:processed].count).to eq(controllers.count)
+      end
     end
     describe "#write_docs" do
       context "no apis registered" do
