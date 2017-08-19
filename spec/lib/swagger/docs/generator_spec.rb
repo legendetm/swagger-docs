@@ -160,19 +160,25 @@ describe Swagger::Docs::Generator do
       end
     end
     describe "#generate" do
-      it "respects parent_controller config option" do
-        new_config = default_config
-        new_config[:parent_controller] = ApplicationController
-        api_config = Swagger::Docs::Config.register_apis(DEFAULT_VER => new_config)
-        results = generate(api_config)
-        expect(results[DEFAULT_VER][:processed].count).to eq(controllers.count)
-      end
-      it "respects parent_controller config option with class name" do
-        new_config = default_config
-        new_config[:parent_controller] = 'ApplicationController'
-        api_config = Swagger::Docs::Config.register_apis(DEFAULT_VER => new_config)
-        results = generate(api_config)
-        expect(results[DEFAULT_VER][:processed].count).to eq(controllers.count)
+      context "with configuration option :parent_controller" do
+        let(:config) { default_config.merge!(:parent_controller => parent_controller) }
+        let(:api_config) { Swagger::Docs::Config.register_apis(DEFAULT_VER => config) }
+        let(:results) { generate(api_config) }
+
+        context 'when class' do
+          let(:parent_controller) { Api::V1::SuperclassController }
+          it { expect(results[DEFAULT_VER][:processed].count).to eq(2) }
+        end
+
+        context 'when class name' do
+          let(:parent_controller) { 'Api::V1::SuperclassController' }
+          it { expect(results[DEFAULT_VER][:processed].count).to eq(2) }
+        end
+
+        context 'when array of class names' do
+          let(:parent_controller) { ['Api::V1::SuperclassController', 'Api::V1::NestedSuperclassController'] }
+          it { expect(results[DEFAULT_VER][:processed].count).to eq(3) }
+        end
       end
     end
     describe "#write_docs" do

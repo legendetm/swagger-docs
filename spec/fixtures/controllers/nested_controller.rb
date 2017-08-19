@@ -1,8 +1,8 @@
 module Api
   module V1
-    class SuperclassController < ApplicationController
+    class NestedSuperclassController < ApplicationController
     end
-    class NestedController < SuperclassController
+    class NestedController < NestedSuperclassController
       swagger_controller :nested, "User Management"
 
       swagger_api :index do

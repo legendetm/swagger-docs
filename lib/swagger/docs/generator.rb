@@ -152,9 +152,10 @@ module Swagger
 
         def proccess_controller?(config, controller)
           return true unless config[:parent_controller]
-          parent_controller = config[:parent_controller]
-          parent_controller = parent_controller.constantize if parent_controller.is_a?(String)
-          controller < parent_controller
+          Array(config[:parent_controller]).any? do |parent_controller|
+            parent_controller = parent_controller.constantize if parent_controller.is_a?(String)
+            controller < parent_controller
+          end
         end
 
         def route_verbs(route)
