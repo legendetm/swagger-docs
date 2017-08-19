@@ -1,4 +1,6 @@
 require "rails"
+require "active_support/core_ext"
+require "action_controller"
 require "swagger/docs"
 require "ostruct"
 require "json"
@@ -11,6 +13,7 @@ RSpec.configure do |config|
     c.syntax = :expect
   end
   config.color = true
+  config.filter_run_when_matching :focus
 
   config.before(:each) do
     Swagger::Docs::Config.base_api_controller = nil # use default object
@@ -18,21 +21,7 @@ RSpec.configure do |config|
 end
 
 def generate(config)
-    Swagger::Docs::Generator::write_docs(config)
-end
-
-def stub_string_verb_route(verb, action, controller, spec)
-  double("route", :verb => verb,
-    :defaults => {:action => action, :controller => controller},
-    :path => spec
-  )
-end
-
-def stub_route(verb, action, controller, spec)
-  double("route", :verb => double("verb", :source => verb),
-    :defaults => {:action => action, :controller => controller},
-    :path => double("path", :spec => spec)
-  )
+  Swagger::Docs::Generator::write_docs(config)
 end
 
 def get_api_paths(apis, path)

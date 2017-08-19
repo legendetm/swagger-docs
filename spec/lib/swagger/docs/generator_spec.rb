@@ -1,30 +1,14 @@
 require 'spec_helper'
+require 'apps'
+require 'fixtures/controllers/application_controller'
+require 'fixtures/controllers/ignored_controller'
 
 describe Swagger::Docs::Generator do
-
-  require "fixtures/controllers/application_controller"
-  require "fixtures/controllers/ignored_controller"
-
   before(:each) do
     FileUtils.rm_rf(tmp_dir)
     stub_const('ActionController::Base', ApplicationController)
+    allow(Rails).to receive(:application).and_return(Main::Application)
   end
-
-  let(:routes) {[
-    stub_route(            "^GET$",    "index",   "api/v1/ignored", "/api/v1/ignored(.:format)"),
-    stub_route(            "^GET$",    "index",   "api/v1/sample",  "/api/v1/sample(.:format)"),
-    stub_string_verb_route("GET",      "index",   "api/v1/nested",  "/api/v1/nested/:nested_id/nested_sample(.:format)"),
-    stub_string_verb_route("GET",      "index",   "api/v1/custom_resource_path", "/api/v1/custom_resource_path/:custom_resource_path/custom_resource_path_sample(.:format)"),
-    stub_route(            "^PATCH$",  "create",  "api/v1/sample",  "/api/v1/sample(.:format)"),
-    stub_route(            "^PUT$",    "create",  "api/v1/sample",  "/api/v1/sample(.:format)"), # intentional duplicate of above route to ensure PATCH is used
-    stub_route(            "^GET$",    "show",    "api/v1/sample",  "/api/v1/sample/:id(.:format)"),
-    stub_route(            "^PUT$",    "update",  "api/v1/sample",  "/api/v1/sample/:id(.:format)"),
-    stub_route(            "^DELETE$", "destroy", "api/v1/sample",  "/api/v1/sample/:id(.:format)"),
-    stub_route(            "^GET$",    "new",     "api/v1/sample",  "/api/v1/sample/new(.:format)"), # no parameters for this method
-    stub_route(            "^GET$",    "index",   "",               "/api/v1/empty_path"), # intentional empty path should not cause any errors
-    stub_route(            "^GET$",    "ignored", "api/v1/sample",  "/api/v1/ignored(.:format)"), # an action without documentation should not cause any errors
-    stub_route(            "^GET|POST$","index",  "api/v1/multiple_routes",  "/api/v1/multiple_routes(.:format)") # multiple route methods
-  ]}
 
   let(:tmp_dir) { Pathname.new('/tmp/swagger-docs/') }
   let(:file_resources) { tmp_dir + 'api-docs.json' }
@@ -32,10 +16,10 @@ describe Swagger::Docs::Generator do
   let(:file_resource_nested) { tmp_dir + 'nested.json' }
   let(:file_resource_custom_resource_path) { tmp_dir + 'custom_resource_path.json' }
 
-  let(:default_config) { 
+  let(:default_config) {
     {
-      :controller_base_path => "api/v1", 
-      :api_file_path => "#{tmp_dir}", 
+      :controller_base_path => "api/v1",
+      :api_file_path => "#{tmp_dir}",
       :base_path => "http://api.no.where/",
       :attributes => {
         :info => {
@@ -46,7 +30,7 @@ describe Swagger::Docs::Generator do
           "license" => "Apache 2.0",
           "licenseUrl" => "http://www.apache.org/licenses/LICENSE-2.0.html"
         }
-      } 
+      }
     }
   }
 
@@ -57,16 +41,18 @@ describe Swagger::Docs::Generator do
     "fixtures/controllers/multiple_routes_controller"
   ]}
 
+  shared_context :resource_apis do
+    let(:resource) { file_resource.read }
+    let(:response) { JSON.parse(resource) }
+    let(:apis) { response["apis"] }
+  end
+
   context "without controller base path" do
-    let(:config) {
-      {
-        DEFAULT_VER => {:api_file_path => "#{tmp_dir}", :base_path => "http://api.no.where/"}
-      }
-    }
+    let(:default_config) { {:api_file_path => "#{tmp_dir}", :base_path => "http://api.no.where/"} }
+    let(:config) { {DEFAULT_VER => default_config} }
     before(:each) do
-      allow(Rails).to receive_message_chain(:application, :routes, :routes).and_return(routes)
       Swagger::Docs::Generator.set_real_methods
-      require "fixtures/controllers/sample_controller"
+      controllers.each{ |path| require path }
       generate(config)
     end
     context "resources files" do
@@ -76,7 +62,7 @@ describe Swagger::Docs::Generator do
         expect(response["basePath"]).to eq "http://api.no.where"
       end
       it "writes apis correctly" do
-        expect(response["apis"].count).to eq 1
+        expect(response["apis"].count).to eq controllers.count
       end
       it "writes api path correctly" do
         expect(response["apis"][0]["path"]).to eq "/api/v1/sample.{format}"
@@ -106,13 +92,51 @@ describe Swagger::Docs::Generator do
         expect(response["resourcePath"]).to eq "sample"
       end
       it "writes out expected api count" do
-        expect(response["apis"].count).to eq 6
+        expect(response["apis"].count).to eq 7
       end
       context "first api" do
         #"apis":[{"path":" /sample","operations":[{"summary":"Fetches all User items"
         #,"method":"get","nickname":"Api::V1::Sample#index"}]
         it "writes path correctly" do
           expect(first["path"]).to eq "/api/v1/sample"
+        end
+      end
+    end
+
+    context 'blog engine' do
+      include_context :resource_apis
+      let(:controllers) { super() | ["fixtures/controllers/blog/articles_controller"] }
+      let(:file_resource) { tmp_dir + "blog/articles.json" }
+
+      context 'when main_application is NOT set' do
+        let(:default_config) { super().merge(:applications => [Main::Application, Blog::Engine]) }
+        it do
+          expect(apis).to contain_exactly(
+            "path" => "/blog/articles",
+            "operations" => contain_exactly(
+              a_hash_including(
+                "summary" => "Fetches all Blog Articles",
+                "nickname" => "Blog::Articles#index",
+                "method" => "get"
+              )
+            )
+          )
+        end
+      end
+
+      context 'when main_application is set' do
+        let(:default_config) { super().merge(:main_application => Main::Application, :applications => [Blog::Engine]) }
+        it do
+          expect(apis).to contain_exactly(
+            "path" => "/blog/articles",
+            "operations" => contain_exactly(
+              a_hash_including(
+                "summary" => "Fetches all Blog Articles",
+                "nickname" => "Blog::Articles#index",
+                "method" => "get"
+              )
+            )
+          )
         end
       end
     end
@@ -124,7 +148,6 @@ describe Swagger::Docs::Generator do
     let(:response) { JSON.parse(resource) }
     let(:apis) { response["apis"] }
     before(:each) do
-      allow(Rails).to receive_message_chain(:application, :routes, :routes).and_return(routes)
       Swagger::Docs::Generator.set_real_methods
       controllers.each{ |path| require path }
     end
@@ -270,14 +293,13 @@ describe Swagger::Docs::Generator do
           expect(response["resourcePath"]).to eq "sample"
         end
         it "writes out expected api count" do
-          expect(response["apis"].count).to eq 6
+          expect(response["apis"].count).to eq 7
         end
         describe "context dependent documentation" do
           after(:each) do
             ApplicationController.context = "original"
           end
-          let(:routes) {[stub_route("^GET$", "context_dependent", "api/v1/sample", "/api/v1/sample(.:format)")]}
-          let(:operations) { apis[0]["operations"] }
+          let(:operations) { get_api_operations(apis, "/context_dependent") }
           it "should be the original" do
             ApplicationController.context = "original"
             generate(config)
@@ -444,7 +466,7 @@ describe Swagger::Docs::Generator do
           it "writes resourcePath correctly" do
             expect(response["resourcePath"]).to eq "resource/testing"
           end
-       end
+        end
       end
     end
   end

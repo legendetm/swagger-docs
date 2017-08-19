@@ -9,7 +9,7 @@ module Swagger
         :base_path => "/",
         :clean_directory => false,
         :formatting => :pretty
-      }
+      }.freeze
 
       class << self
 
@@ -48,11 +48,12 @@ module Swagger
           results = {}
           set_real_methods
 
-          apis[DEFAULT_VER] = DEFAULT_CONFIG if apis.empty?
+          apis[DEFAULT_VER] = DEFAULT_CONFIG.dup if apis.empty?
 
           apis.each do |api_version, config|
             settings = get_settings(api_version, config)
             config.reverse_merge!(DEFAULT_CONFIG)
+            config.reverse_merge!(:applications => Config.base_applications)
             results[api_version] = generate_doc(api_version, settings, config)
             results[api_version][:settings] = settings
             results[api_version][:config] = config
@@ -71,7 +72,7 @@ module Swagger
           results = {:processed => [], :skipped => []}
           resources = []
 
-          get_route_paths(settings[:controller_base_path]).each do |path|
+          get_route_paths(config, settings[:controller_base_path]).each do |path|
             ret = process_path(path, root, config, settings)
             results[ret[:action]] << ret
             if ret[:action] == :processed
@@ -138,7 +139,7 @@ module Swagger
           return {action: :skipped, path: path, reason: :not_swagger_resource} if !klass.methods.include?(:swagger_config) or !klass.swagger_config[:controller]
           return {action: :skipped, path: path, reason: :not_kind_of_parent_controller} if config[:parent_controller] && !(klass < config[:parent_controller])
           apis, models, defined_nicknames = [], {}, []
-          routes.select{|i| i.defaults[:controller] == path}.each do |route|
+          routes(config).select{|i| i.defaults[:controller] == path}.each do |route|
             unless nickname_defined?(defined_nicknames, path, route) # only add once for each route once e.g. PATCH, PUT 
               ret = get_route_path_apis(path, route, klass, settings, config)
               apis = apis + ret[:apis]
@@ -150,7 +151,13 @@ module Swagger
         end
 
         def route_verbs(route)
-          if defined?(route.verb.source) then route.verb.source.to_s.delete('$'+'^').split('|') else [route.verb] end.collect{|verb| verb.downcase.to_sym}
+          if defined?(route.verb.source)
+            route.verb.source.to_s.delete('$^').split('|')
+          elsif route.verb.is_a?(String)
+            route.verb.split('|')
+          else
+            [route.verb]
+          end.collect{|verb| verb.downcase.to_sym}
         end
 
         def path_route_nickname(path, route)
@@ -177,9 +184,9 @@ module Swagger
           declaration.generate_resource
         end
 
-        def routes
-          Config.base_applications.flat_map do |app|
-            app.routes.routes.map {|route| AppRoute.new(app, route)}
+        def routes(config)
+          config[:applications].flat_map do |app|
+            app.routes.routes.map {|route| AppRoute.new(config, app, route)}
           end
         end
 
@@ -233,8 +240,8 @@ module Swagger
           }.freeze
         end
 
-        def get_route_paths(controller_base_path)
-          paths = routes.map{|i| "#{i.defaults[:controller]}" }
+        def get_route_paths(config, controller_base_path)
+          paths = routes(config).map{|i| "#{i.defaults[:controller]}" }
           paths.uniq.select{|i| i.start_with?(controller_base_path)}
         end
 

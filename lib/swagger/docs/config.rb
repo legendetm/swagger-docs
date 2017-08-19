@@ -23,7 +23,7 @@ module Swagger
         end
 
         def base_application
-          Rails.application 
+          Rails.application
         end
 
         def register_apis(versions)
