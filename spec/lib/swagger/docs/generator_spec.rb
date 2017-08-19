@@ -6,6 +6,7 @@ require 'fixtures/controllers/ignored_controller'
 describe Swagger::Docs::Generator do
   before(:each) do
     FileUtils.rm_rf(tmp_dir)
+    FileUtils.mkdir(tmp_dir)
     stub_const('ActionController::Base', ApplicationController)
     allow(Rails).to receive(:application).and_return(Main::Application)
   end
@@ -44,6 +45,12 @@ describe Swagger::Docs::Generator do
   shared_context :resource_apis do
     let(:resource) { file_resource.read }
     let(:response) { JSON.parse(resource) }
+    let(:apis) { response["apis"] }
+  end
+
+  shared_context :resources_api do
+    let(:resources) { file_resources.read }
+    let(:response) { JSON.parse(resources) }
     let(:apis) { response["apis"] }
   end
 
@@ -483,4 +490,31 @@ describe Swagger::Docs::Generator do
       end
     end
   end
+
+  context "base path tests" do
+    include_context :resources_api
+    before(:each) do
+      Swagger::Docs::Generator.set_real_methods
+      require "fixtures/controllers/sample_controller"
+    end
+
+    it "default basePath = '/'" do
+      config = {DEFAULT_VER => {:api_file_path => "#{tmp_dir}"}}
+      generate(config)
+      expect(response['basePath']).to eq '/'
+    end
+
+    it "explicit '/' basePath = '/'" do
+      config = {DEFAULT_VER => {:api_file_path => "#{tmp_dir}", :base_path => "/"}}
+      generate(config)
+      expect(response['basePath']).to eq '/'
+    end
+
+    it "swagger document root '/swagger' basePath = '/'" do
+      config = {DEFAULT_VER => {api_document_root: '/swagger', :api_file_path => "#{tmp_dir}", :base_path => "/"}}
+      generate(config)
+      expect(response['apis'].first['path']).to eq '/swagger/api/v1/sample.{format}'
+    end
+  end
+
 end
